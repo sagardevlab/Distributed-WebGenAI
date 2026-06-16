@@ -1,0 +1,2 @@
+com.sagardevlab.distributed_webgenai.common_lib.security.SharedSecurityAutoConfiguration
+com.sagardevlab.distributed_webgenai.common_lib.error.SharedExceptionAutoConfiguration
