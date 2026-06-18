@@ -1,0 +1,50 @@
+# k8s/proxy/proxy-deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webgenai-me-proxy
+  namespace: webgenai-core
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webgenai-me-proxy
+  template:
+    metadata:
+      labels:
+        app: webgenai-me-proxy
+    spec:
+      containers:
+        - name: webgenai-me-proxy
+          image: sagar/webgenai-me-proxy:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
+          envFrom:
+            - configMapRef:
+                name: webgenai-shared-config
+          env:
+            - name: REDIS_URL
+              value: "redis://redis-0.redis.webgenai-core.svc.cluster.local:6379" 
+            - name: PORT
+              value: "80"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webgenai-me-proxy
+  namespace: webgenai-core
+spec:
+  selector:
+    app: webgenai-me-proxy
+  ports:
+    - port: 80
+      targetPort: 80

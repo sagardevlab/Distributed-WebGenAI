@@ -1,0 +1,57 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: webgenai-main-ingress
+  namespace: webgenai-core
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: "nginx"
+  rules:
+  # 1. Main Website Route (The Frontend!)
+  - host: "sagardevlab.in"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: webgenai-frontend
+            port:
+              number: 80
+              
+  - host: "www.sagardevlab.in"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: webgenai-frontend
+            port:
+              number: 80
+
+  # 2. Previews Route
+  - host: "*.previews.sagardevlab.in"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: webgenai-me-proxy
+            port:
+              number: 80
+  
+  # 3. API Gateway Route
+  - host: "api.sagardevlab.in"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway
+            port:
+              number: 80
