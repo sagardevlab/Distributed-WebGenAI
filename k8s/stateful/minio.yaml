@@ -4,7 +4,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: minio
-  namespace: lovable-core
+  namespace: webgenai-core
 spec:
   selector:
     matchLabels:
@@ -57,7 +57,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: minio
-  namespace: lovable-core
+  namespace: webgenai-core
 spec:
   selector:
     app: minio
