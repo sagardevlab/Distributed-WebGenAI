@@ -36,6 +36,12 @@ public class GatewayJwtAuthFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
 
+        // Service-to-service endpoints must never be reachable from outside the cluster
+        if (pathMatcher.match("/*/internal/**", path)) {
+            log.warn("Blocked external call to internal endpoint: {}", path);
+            return sendErrorResponse(exchange, HttpStatus.FORBIDDEN, "Internal endpoint");
+        }
+
         boolean isPublic = securityProperties.getPublicRoutes().stream()
                 .anyMatch(pattern -> pathMatcher.match(pattern, path));
 

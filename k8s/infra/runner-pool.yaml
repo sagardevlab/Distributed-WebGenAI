@@ -39,7 +39,7 @@ spec:
 
         # 2. THE SYNCER (MinIO mc)
         - name: syncer
-          image: minio/mc
+          image: quay.io/minio/mc:latest   # minio/mc is no longer published on Docker Hub
           command: ["/bin/sh", "-c", "sleep infinity"]
           env:
             - name: MINIO_USER

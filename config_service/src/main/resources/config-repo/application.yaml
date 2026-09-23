@@ -1,0 +1,37 @@
+# Shared by every service that imports from the config server.
+jwt:
+  # Required, no default: every service refuses to start without a JWT_SECRET of at least 32 characters.
+  secret-key: ${JWT_SECRET:}
+
+# Direct service-to-service URLs used by the Feign clients (no Eureka needed).
+ACCOUNT_SERVICE_URI: http://localhost:9050
+WORKSPACE_SERVICE_URI: http://localhost:9020
+INTELLIGENCE_SERVICE_URI: http://localhost:9030
+
+eureka:
+  client:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+    consumer:
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+        spring.json.trusted.packages: com.sagardevlab.distributed_webgenai.*

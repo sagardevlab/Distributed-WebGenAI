@@ -1,0 +1,19 @@
+# Build output
+**/target/
+**/node_modules/
+**/dist/
+
+# IDE / OS
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local secrets - copy k8s/.env.example to k8s/.env and fill in real values
+.env
+*.env
+!*.env.example

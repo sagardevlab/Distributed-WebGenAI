@@ -7,4 +7,6 @@ import java.util.Optional;
 
 public interface PlanRepository extends JpaRepository<Plan, Long> {
     Optional<Plan> findByStripePriceId(String id);
+
+    Optional<Plan> findFirstByNameIgnoreCase(String name);
 }

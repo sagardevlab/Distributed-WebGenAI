@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://pgvector-0.pgvector.webgenai-core.svc.cluster.local:5432/workspace_db
+  data:
+    redis:
+      host: redis-0.redis.webgenai-core.svc.cluster.local
+
+minio:
+  url: http://minio.webgenai-core.svc.cluster.local:9000
+
+app:
+  preview:
+    mode: k8s

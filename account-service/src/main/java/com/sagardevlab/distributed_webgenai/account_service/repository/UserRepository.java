@@ -1,6 +1,5 @@
 package com.sagardevlab.distributed_webgenai.account_service.repository;
 
-import aj.org.objectweb.asm.commons.Remapper;
 import com.sagardevlab.distributed_webgenai.account_service.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

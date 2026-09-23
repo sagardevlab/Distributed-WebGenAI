@@ -4,6 +4,7 @@ import com.sagardevlab.distributed_webgenai.common_lib.dto.UserDto;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
@@ -18,8 +19,19 @@ import java.util.Date;
 @Component
 public class AuthUtil {
 
-    @Value("${jwt.secret-key}")
+    /** HMAC-SHA keys must be at least 256 bits. */
+    static final int MIN_SECRET_LENGTH = 32;
+
+    @Value("${jwt.secret-key:}")
     private String jwtSecretKey;
+
+    @PostConstruct
+    void validateSecret() {
+        if (jwtSecretKey == null || jwtSecretKey.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_LENGTH) {
+            throw new IllegalStateException("JWT_SECRET must be set to a random value of at least "
+                    + MIN_SECRET_LENGTH + " characters");
+        }
+    }
 
     private SecretKey getSecretKey() {
         return Keys.hmacShaKeyFor(jwtSecretKey.getBytes(StandardCharsets.UTF_8));

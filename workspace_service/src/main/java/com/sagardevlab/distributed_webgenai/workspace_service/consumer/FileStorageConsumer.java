@@ -4,6 +4,7 @@ import com.sagardevlab.distributed_webgenai.common_lib.event.FileStoreRequestEve
 import com.sagardevlab.distributed_webgenai.common_lib.event.FileStoreResponseEvent;
 import com.sagardevlab.distributed_webgenai.workspace_service.entity.ProcessedEvent;
 import com.sagardevlab.distributed_webgenai.workspace_service.repository.ProcessedEventRepository;
+import com.sagardevlab.distributed_webgenai.workspace_service.service.DeploymentService;
 import com.sagardevlab.distributed_webgenai.workspace_service.service.ProjectFileService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class FileStorageConsumer {
     private final ProjectFileService projectFileService;
     private final ProcessedEventRepository processedEventRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final DeploymentService deploymentService;
 
     @Transactional
     @KafkaListener(topics = "file-storage-request-event", groupId = "workspace-group")
@@ -41,6 +43,7 @@ public class FileStorageConsumer {
             processedEventRepository.save(new ProcessedEvent(
                     requestEvent.sagaId(), LocalDateTime.now()
             ));
+            deploymentService.onFileSaved(requestEvent.projectId(), requestEvent.filePath(), requestEvent.content());
 
             sendResponse(requestEvent, true, null);
         } catch (Exception e) {

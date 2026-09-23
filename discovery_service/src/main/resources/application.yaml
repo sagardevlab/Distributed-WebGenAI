@@ -8,3 +8,6 @@ eureka:
   client:
     register-with-eureka: false
     fetch-registry: false
+    # Use Spring's RestClient transport; with Jersey on the classpath but not enabled, no transport is configured
+    jersey:
+      enabled: false

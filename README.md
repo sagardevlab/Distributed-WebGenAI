@@ -1,212 +1,236 @@
 # Distributed WebGenAI
 
-Distributed WebGenAI is a Spring Boot microservices platform for building and running AI-assisted workspace experiences. It combines authentication, project/workspace management, AI chat and generation, centralized configuration, service discovery, and Kubernetes-based preview deployment support.
+Distributed WebGenAI is an AI web-app builder built as Spring Boot microservices. You describe an app in plain words, Claude writes the React code, and the running app appears in a live preview next to the chat. Every follow-up prompt edits the same app and the preview hot-reloads.
+
+The platform covers accounts and plans, projects and their files, AI generation with streaming output, per-project live previews, centralized configuration, and Kubernetes deployment.
 
 ## What is in this repository
 
-This repository is organized as a set of standalone Maven projects rather than a single parent build. Each service has its own `pom.xml`, Maven wrapper, source tree, and test tree.
+The repository is a set of standalone Maven projects rather than a single parent build. Each service has its own `pom.xml`, Maven wrapper, source tree and tests.
 
 ```text
 Distributed-WebGenAI/
-  account-service/
-  api_gateway/
-  common-lib/
-  config_service/
-  discovery_service/
-  intelligent_service/
-  workspace_service/
-  k8s/
+  account-service/     users, login, plans, Stripe billing
+  api_gateway/         single entry point, JWT check, routing
+  common-lib/          shared DTOs, security, events, errors
+  config_service/      Spring Cloud Config server + bundled config-repo
+  discovery_service/   Eureka registry (optional)
+  intelligent_service/ AI generation (Claude), chat history, token usage
+  workspace_service/   projects, files, members, live previews
+  frontend/            React UI: chat, live preview, code view
+  k8s/                 Kubernetes manifests + preview proxy
+  local/               helper files for running locally
+  docker-compose.yml   Postgres, Redis, Kafka, MinIO for local development
 ```
 
-## System Overview
+## System overview
 
 ```mermaid
 flowchart LR
-  U[Users] --> FE[Frontend]
-  U --> GW[API Gateway]
-  FE --> GW
+  U[User] --> FE[Frontend]
+  FE --> GW[API Gateway]
+  FE -. iframe .-> PV[Live preview]
 
   GW --> ACC[Account Service]
   GW --> WS[Workspace Service]
   GW --> AI[Intelligence Service]
 
-  ACC --> CFG[Config Service]
-  WS --> CFG
-  AI --> CFG
-  GW --> CFG
+  AI -->|Feign| WS
+  AI -->|Feign| ACC
+  WS -->|Feign| ACC
+  AI --> CLAUDE[Anthropic API]
 
-  ACC --> DISC[Discovery Service]
-  WS --> DISC
-  AI --> DISC
-  GW --> DISC
+  AI -- file edits --> KAFKA[(Kafka)]
+  KAFKA --> WS
 
-  ACC --> PG[(pgvector / PostgreSQL)]
+  ACC --> PG[(PostgreSQL)]
   WS --> PG
   AI --> PG
-
-  WS --> REDIS[(Redis)]
   WS --> MINIO[(MinIO)]
-  AI --> KAFKA[(Kafka)]
+  WS --> REDIS[(Redis)]
+  WS --> PV
   PXY[Preview Proxy] --> REDIS
-  WS --> PXY
+  PXY --> PV
+
+  CFG[Config Service] -. config .-> ACC & WS & AI & GW
 ```
 
 ## Services
 
 | Service | Location | Responsibility | Port |
 | --- | --- | --- | --- |
-| Discovery Service | `discovery_service/` | Eureka service registry for Spring services | `8761` |
-| Config Service | `config_service/` | Centralized Spring Cloud Config server | `8888` |
-| API Gateway | `api_gateway/` | Edge routing, gateway filtering, JWT-based gateway security | `8080` in container, exposed on `80` in Kubernetes |
-| Account Service | `account-service/` | Authentication, user accounts, subscriptions, billing, Stripe integration | `9050` in container, exposed on `80` in Kubernetes |
-| Workspace Service | `workspace_service/` | Projects, files, members, deployment workflow, preview orchestration | `9020` in container, exposed on `80` in Kubernetes |
-| Intelligence Service | `intelligent_service/` | AI chat, generation, usage tracking, and workspace/account integrations | `9030` in container, exposed on `80` in Kubernetes |
-| Common Lib | `common-lib/` | Shared DTOs, security helpers, events, enums, and error types | Library only |
-| Frontend | `k8s/services/frontend.yaml` | Static web UI served through Kubernetes ingress | `80` |
-| Preview Proxy | `k8s/proxy/` | Wildcard proxy that routes preview subdomains to running preview environments | `80` |
+| Config Service | `config_service/` | Serves configuration to every service | `8888` |
+| API Gateway | `api_gateway/` | Routing, JWT validation, CORS, blocks `/internal/**` | `8080` |
+| Account Service | `account-service/` | Sign-up/login, plans (Free/Pro/Business), Stripe billing | `9050`, path `/account` |
+| Workspace Service | `workspace_service/` | Projects, files (MinIO), members, starter template, live previews | `9020`, path `/workspace` |
+| Intelligence Service | `intelligent_service/` | Claude code generation, chat history, daily token limits | `9030`, path `/intelligence` |
+| Discovery Service | `discovery_service/` | Eureka registry (optional, not used by default) | `8761` |
+| Common Lib | `common-lib/` | Shared DTOs, JWT utilities, Kafka events, enums, error handling | library |
+| Frontend | `frontend/` | React UI: auth, projects, streaming chat, live preview, code view | `5173` in dev, `80` in the container |
+| Preview Proxy | `k8s/proxy/` | Routes `project-<id>.previews.<domain>` to the right preview pod | `80` |
 
-## Service Notes
+In Kubernetes every service is exposed on port `80` through its `Service`.
 
-### Discovery Service
-
-The discovery service is a Spring Cloud Eureka server. It does not register itself and is meant to support service discovery for the other Spring Boot services.
+## Service notes
 
 ### Config Service
 
-The config service is the shared configuration source for the platform. Other services import configuration from `CONFIG_SERVER_URL`, which points to the config server in Kubernetes.
+Other services import their configuration from `CONFIG_SERVER_URL` (default `http://localhost:8888`). The configuration lives in `config_service/src/main/resources/config-repo/` and is served with the `native` backend:
+
+- `application.yaml` holds shared settings (JWT secret, Kafka serialization, service-to-service URLs).
+- `<service>.yaml` holds per-service settings (port, context path, database, MinIO, AI model, gateway routes).
+- `*-k8s.yaml` files override hostnames when a service runs with `SPRING_PROFILES_ACTIVE=k8s`.
+
+To serve an external Git repository instead, start the config service with `CONFIG_BACKEND=git` plus `CONFIG_GIT_URI`, `GIT_USERNAME` and `GIT_PASSWORD`.
 
 ### API Gateway
 
-The gateway is the external entry point for backend traffic. It uses Spring Cloud Gateway, JWT handling, and shared security utilities from `common-lib`.
+The single entry point for browser traffic. It validates the JWT on every non-public route, routes `/account/**`, `/workspace/**` and `/intelligence/**` to the matching service, and returns `403` for any `/*/internal/**` path so service-to-service endpoints can't be reached from outside. Allowed browser origins are set with `CORS_ALLOWED_ORIGINS` (comma-separated).
 
 ### Account Service
 
-The account service manages users, authentication, plans, subscriptions, and billing. It integrates with Stripe and PostgreSQL.
+Handles sign-up, login (JWT), plans, subscriptions and Stripe checkout/webhooks. On first start it seeds three plans (Free, Pro, Business). Users without a paid subscription are on the Free plan: 3 projects and 100,000 AI tokens per day.
 
 ### Workspace Service
 
-The workspace service manages projects, files, members, file storage, deployment metadata, and preview-related functionality. It uses PostgreSQL, Redis, MinIO, and Kubernetes-facing integration points.
+Manages projects, members and files. File contents are stored in MinIO, metadata in Postgres. On every start it creates the MinIO buckets and uploads the starter template from `src/main/resources/starter-template/` (React 19, Vite 6, Tailwind 4, daisyUI 5, lucide-react, with a lockfile). Each new project is a copy of that template.
+
+It also runs the live previews, in one of two modes (`app.preview.mode`):
+
+| Mode | Used when | How it works |
+| --- | --- | --- |
+| `local` | default outside Kubernetes | Copies the project to `<tmp>/webgenai-previews/project-<id>` and runs the Vite dev server on port `5200 + id`. AI edits are written straight into that folder. |
+| `k8s` | `SPRING_PROFILES_ACTIVE=k8s` | Claims an idle pod from `runner-pool`, syncs the files from MinIO with `mc mirror --watch`, and registers the route in Redis for the preview proxy. |
 
 ### Intelligence Service
 
-The intelligence service provides AI features such as chat and code generation, and it tracks usage and message/session data. It also integrates with other services through Feign clients and shared security components.
+Generates code with Claude through the Anthropic API (Spring AI). It gives the model the project's file tree and a `read_files` tool, streams the model's output to the browser, stores the conversation, and records token usage against the user's daily plan limit. Errors from the AI provider, such as an invalid key or rate limiting, are shown in the chat.
 
-### Common Lib
+### Discovery Service
 
-The shared library contains reusable authentication, security, event, DTO, enum, and error-handling code used by the main services.
+A Eureka server. It is optional: by default the services call each other through the URLs in the config repo (`ACCOUNT_SERVICE_URI`, `WORKSPACE_SERVICE_URI`, `INTELLIGENCE_SERVICE_URI`), and the Eureka client is disabled.
 
 ### Frontend
 
-The frontend is deployed as a separate static web application and served from the main domain through Kubernetes ingress.
+A React + Vite app. It streams the AI's output over server-sent events, shows file reads and edits as they happen, and renders the generated app in an iframe. Set `VITE_API_URL` to the gateway URL (default `http://localhost:8080`). For Kubernetes it is built into an nginx image (`frontend/Dockerfile`).
 
 ### Preview Proxy
 
-The preview proxy is a small Node.js service that looks up preview routing targets in Redis and forwards HTTP/WebSocket traffic to the correct preview environment. It is used for wildcard preview subdomains.
+A small Node.js service that looks up `route:<hostname>` in Redis and forwards HTTP and WebSocket traffic (including Vite hot reload) to the matching preview pod.
 
-## Kubernetes and Runtime Infrastructure
+## How a generation works
 
-The `k8s/` folder contains the deployment and infrastructure definitions used by the platform:
+1. The user sends a prompt from the chat panel. The frontend calls `POST /intelligence/chat/stream`.
+2. The intelligence service checks the user's daily token limit, adds the project's file tree to the prompt, and lets Claude call `read_files`. Claude's answer streams back as `<message>`, `<tool>` and `<file path="...">` tags.
+3. When the stream completes, the answer is parsed into chat events and saved. Each `<file>` is published to Kafka (`file-storage-request-event`).
+4. The workspace service writes the file to MinIO, records it in Postgres, and replies on `file-store-responses`. The chat event is marked `CONFIRMED`.
+5. The running preview picks up the change and Vite hot-reloads it in the iframe.
 
-- `k8s/infra/` contains namespaces, shared config, and ingress rules.
-- `k8s/services/` contains the core microservice deployments and services.
-- `k8s/stateful/` contains the backing stateful dependencies.
-- `k8s/proxy/` contains the preview proxy implementation.
+## Configuration
 
-### Ingress routes
+| Variable | Used by | Default | Purpose |
+| --- | --- | --- | --- |
+| `JWT_SECRET` | all services | none (required) | Signs and validates login tokens. At least 32 characters; every service refuses to start without it. |
+| `ANTHROPIC_API_KEY` | intelligence | none (required) | Anthropic API key |
+| `ANTHROPIC_MODEL` | intelligence | `claude-opus-5` | Claude model used for code generation |
+| `AI_PROVIDER` | intelligence | `anthropic` | Set to `openai` to use an OpenAI-compatible API instead (`AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`) |
+| `STRIPE_API_KEY`, `STRIPE_WEBHOOK_SECRET` | account | placeholders | Only needed for paid-plan checkout |
+| `FRONTEND_URL` | account | `http://localhost:5173` | Stripe checkout return URL |
+| `CORS_ALLOWED_ORIGINS` | gateway | localhost + sagardevlab.in | Browser origins allowed to call the API |
+| `DB_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` | account, workspace, intelligence | match `docker-compose.yml` | Database and object-storage credentials |
+| `PREVIEW_MODE` | workspace | `local` | `local` or `k8s` preview runner |
 
-- `sagardevlab.in` and `www.sagardevlab.in` route to the frontend.
-- `api.sagardevlab.in` routes to the API gateway.
-- `*.previews.sagardevlab.in` routes to the preview proxy.
+## Run locally
 
-### Stateful dependencies
+Prerequisites: JDK 21, Maven, Node 20+, Docker.
 
-| Dependency | Purpose | Port |
-| --- | --- | --- |
-| PostgreSQL with pgvector | Persistence for account, workspace, and intelligence data | `5432` |
-| Redis | Preview routing and fast key/value state | `6379` |
-| MinIO | Object storage for workspace assets and generated files | `9000`, `9001` |
-| Kafka | Event streaming / saga-style service communication | `9092`, `29093` |
-
-## Shared Runtime Dependencies
-
-Most Spring services use the same Kubernetes-backed runtime patterns:
-
-- `SPRING_PROFILES_ACTIVE=k8s`
-- `CONFIG_SERVER_URL=http://config-service.webgenai-core.svc.cluster.local:8888`
-- `SPRING_CLOUD_CONFIG_FAIL_FAST=false`
-- `SPRING_CLOUD_CONFIG_RETRY_MAX_ATTEMPTS=10`
-- `SPRING_CLOUD_CONFIG_RETRY_INITIAL_INTERVAL=3000`
-
-Secrets and environment variables are injected through Kubernetes secrets and config maps, including:
-
-- `JWT_SECRET`
-- `DB_PASSWORD`
-- `POSTGRES_PASSWORD`
-- `STRIPE_API_KEY`
-- `STRIPE_WEBHOOK_SECRET`
-- `AI_API_KEY`
-- `MINIO_ROOT_USER`
-- `MINIO_ROOT_PASSWORD`
-- `GIT_USERNAME`
-- `GIT_PASSWORD`
-
-## Local Build
-
-Each Spring Boot module can be built independently with its own Maven wrapper.
+**1. Start the backing services** (Postgres on host port `5433`, Redis `6379`, Kafka `9092`, MinIO `9000`/`9001`):
 
 ```bash
-cd account-service
-./mvnw clean test
-
-cd ../api_gateway
-./mvnw clean test
-
-cd ../config_service
-./mvnw clean test
-
-cd ../discovery_service
-./mvnw clean test
-
-cd ../intelligent_service
-./mvnw clean test
-
-cd ../workspace_service
-./mvnw clean test
+docker compose up -d
 ```
 
-On Windows PowerShell, use `mvnw.cmd` instead of `./mvnw`.
-
-The preview proxy is a Node.js service:
+**2. Install the shared library** (every service depends on it):
 
 ```bash
-cd k8s/proxy
-npm install
-npm start
+cd common-lib && mvn install -DskipTests
 ```
 
-## Suggested Start Order
+**3. Set the required secrets.** Every service must use the same `JWT_SECRET`:
 
-If you are running the platform outside Kubernetes, start the services in this order:
+```powershell
+# Windows: open new terminals afterwards
+setx JWT_SECRET "<a random string of 32+ characters>"
+setx ANTHROPIC_API_KEY "sk-ant-..."
+```
+```bash
+# macOS / Linux
+export JWT_SECRET="$(openssl rand -base64 48)"
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
 
-1. PostgreSQL / pgvector, Redis, MinIO, and Kafka.
-2. Config Service.
-3. Discovery Service.
-4. Account Service, Workspace Service, and Intelligence Service.
-5. API Gateway.
-6. Frontend and the preview proxy, if you are testing the full web experience.
+**4. Start the Spring services**, each in its own terminal, config service first:
 
-## Repository Purpose
+```bash
+cd config_service      && mvn spring-boot:run   # :8888
+cd account-service     && mvn spring-boot:run   # :9050  /account
+cd workspace_service   && mvn spring-boot:run   # :9020  /workspace
+cd intelligent_service && mvn spring-boot:run   # :9030  /intelligence
+cd api_gateway         && mvn spring-boot:run   # :8080
+```
 
-This codebase is intended to support a distributed GenAI product with:
+**5. Start the frontend:**
 
-- user authentication and billing
-- project and workspace management
-- AI-assisted generation and chat
-- preview environments for generated applications
-- Kubernetes deployment for core services and shared state
+```bash
+cd frontend && npm install && npm run dev   # http://localhost:5173
+```
 
-## Notes
+Sign up, create a project and describe the app you want. The first preview of a project takes about a minute while `npm install` runs; each project's `dev.log` is in `<tmp>/webgenai-previews/project-<id>`.
 
-- There is no single root Maven parent in this repository; the services are intentionally independent.
-- The exact service implementation details live in each module under `src/main/java` and are exposed through Spring Boot application classes and Kubernetes manifests.
-- For production deployment, the `k8s/` manifests are the best reference for ports, environment variables, and inter-service dependencies.
+To stop the backing services, run `docker compose stop` (data is kept) or `docker compose down -v` (data is deleted).
+
+## Tests
+
+```bash
+cd <service> && mvn verify
+```
+
+Tests run without the stack: unit tests for JWT signing and validation (`common-lib`, `api_gateway`) and for parsing the AI's output (`intelligent_service`), plus standalone context tests for the config and discovery services. Install `common-lib` first.
+
+## Kubernetes
+
+The `k8s/` folder holds the deployment:
+
+- `k8s/infra/` - namespaces, shared config map, ingress, network policies, preview runner pool
+- `k8s/stateful/` - PostgreSQL (pgvector), Redis, Kafka, MinIO
+- `k8s/services/` - the Spring services and the frontend
+- `k8s/proxy/` - the preview proxy (source, Dockerfile and deployment)
+
+Ingress routes:
+
+- `sagardevlab.in` and `www.sagardevlab.in` → frontend
+- `api.sagardevlab.in` → API gateway
+- `*.previews.sagardevlab.in` → preview proxy
+
+**Build the images.** Each Spring service's `Dockerfile` is built from the repository root:
+
+```bash
+docker build -f account-service/Dockerfile      -t sagar/webgenai-account-service .
+docker build -f workspace_service/Dockerfile    -t sagar/webgenai-workspace-service .
+docker build -f intelligent_service/Dockerfile  -t sagar/webgenai-intelligence-service .
+docker build -f api_gateway/Dockerfile          -t sagar/webgenai-api-gateway .
+docker build -f config_service/Dockerfile       -t sagar/webgenai-config-service .
+docker build -f frontend/Dockerfile --build-arg VITE_API_URL=https://api.sagardevlab.in -t sagar/webgenai-frontend frontend
+docker build -t sagar/webgenai-me-proxy k8s/proxy
+```
+
+**Create the secrets.** Copy `k8s/.env.example` to `k8s/.env` (git-ignored), fill in real values, and create the `app-secrets` secret in both namespaces as shown at the top of that file.
+
+**Apply the manifests** in this order: `infra/namespaces.yaml` → `stateful/` → `services/` → `proxy/` → the rest of `infra/`. With `SPRING_PROFILES_ACTIVE=k8s` the services use the in-cluster hostnames from the `*-k8s.yaml` config files, and the workspace service uses the runner-pool preview mode.
+
+## Known limitations
+
+- Stripe billing needs real keys and price IDs. The seeded Pro and Business plans use placeholder price IDs; update the `plan` table once you have real ones.
+- A generation is saved only when the stream completes. If the browser disconnects mid-generation, that turn is lost.
+- `/account/auth/me` is not implemented yet. The frontend keeps the user from the login response.
+- Local previews are not stopped automatically. They end when the workspace service stops.

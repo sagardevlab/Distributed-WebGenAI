@@ -22,8 +22,10 @@ spec:
           ports:
             - containerPort: 8888
           env:
+            # "native" serves the config bundled in the image (config_service/src/main/resources/config-repo).
+            # Use "git" together with CONFIG_GIT_URI to serve an external config repository instead.
             - name: SPRING_PROFILES_ACTIVE
-              value: k8s
+              value: native
             - name: GIT_USERNAME
               valueFrom:
                 secretKeyRef:

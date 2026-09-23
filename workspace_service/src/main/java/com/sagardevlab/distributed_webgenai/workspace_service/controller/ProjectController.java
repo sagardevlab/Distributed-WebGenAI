@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -49,6 +50,7 @@ public class ProjectController {
     }
 
     @PostMapping("/{id}/deploy")
+    @PreAuthorize("@security.canViewProject(#id)")
     public ResponseEntity<DeployResponse> deployProject(@PathVariable Long id) {
         return ResponseEntity.ok(deploymentService.deploy(id));
     }

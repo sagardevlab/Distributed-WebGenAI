@@ -39,9 +39,6 @@ public class ProjectFileServiceImpl implements ProjectFileService {
     @Value("${minio.project-bucket}")
     private String projectBucket;
 
-    private static final String BUCKET_NAME = "projects";
-
-
     @Override
     public FileTreeDto getFileTree(Long projectId) {
         List<ProjectFile> projectFileList = projectFileRepository.findByProjectId(projectId);
@@ -51,11 +48,12 @@ public class ProjectFileServiceImpl implements ProjectFileService {
 
     @Override
     public String getFileContent(Long projectId, String path) {
-        String objectName = projectId + "/" + path;
+        String cleanPath = path.startsWith("/") ? path.substring(1) : path;
+        String objectName = projectId + "/" + cleanPath;
         try (
                 InputStream is = minioClient.getObject(
                         GetObjectArgs.builder()
-                                .bucket(BUCKET_NAME)
+                                .bucket(projectBucket)
                                 .object(objectName)
                                 .build())) {
 

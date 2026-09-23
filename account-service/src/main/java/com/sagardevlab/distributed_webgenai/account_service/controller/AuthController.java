@@ -4,6 +4,7 @@ import com.sagardevlab.distributed_webgenai.account_service.dto.auth.AuthRespons
 import com.sagardevlab.distributed_webgenai.account_service.dto.auth.LoginRequest;
 import com.sagardevlab.distributed_webgenai.account_service.dto.auth.SignupRequest;
 import com.sagardevlab.distributed_webgenai.account_service.service.AuthService;
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -20,12 +21,12 @@ public class AuthController {
 //    UserService userService;
 
     @PostMapping("/signup")
-    public ResponseEntity<AuthResponse> signup(@RequestBody SignupRequest request) {
+    public ResponseEntity<AuthResponse> signup(@RequestBody @Valid SignupRequest request) {
         return ResponseEntity.ok(authService.signup(request));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<AuthResponse> login(@RequestBody @Valid LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
 

@@ -5,4 +5,8 @@ import org.jspecify.annotations.Nullable;
 
 public interface DeploymentService {
     @Nullable DeployResponse deploy(Long projectId);
+
+    /** Called after a file of the project was persisted, so a running preview can pick it up. */
+    default void onFileSaved(Long projectId, String path, String content) {
+    }
 }

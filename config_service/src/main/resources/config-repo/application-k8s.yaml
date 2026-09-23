@@ -1,0 +1,7 @@
+ACCOUNT_SERVICE_URI: http://account-service.webgenai-core.svc.cluster.local
+WORKSPACE_SERVICE_URI: http://workspace-service.webgenai-core.svc.cluster.local
+INTELLIGENCE_SERVICE_URI: http://intelligence-service.webgenai-core.svc.cluster.local
+
+spring:
+  kafka:
+    bootstrap-servers: kafka-0.kafka.webgenai-core.svc.cluster.local:9092

@@ -1,0 +1,3 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://pgvector-0.pgvector.webgenai-core.svc.cluster.local:5432/account_db

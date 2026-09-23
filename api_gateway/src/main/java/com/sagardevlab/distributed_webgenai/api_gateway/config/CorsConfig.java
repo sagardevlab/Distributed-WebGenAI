@@ -1,5 +1,6 @@
 package com.sagardevlab.distributed_webgenai.api_gateway.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
@@ -12,14 +13,13 @@ import java.util.List;
 @Configuration
 public class CorsConfig {
 
+    @Value("${app.cors.allowed-origins:http://localhost:5173}")
+    private List<String> allowedOrigins;
+
     @Bean
     public CorsWebFilter corsWebFilter() {
         CorsConfiguration corsConfig = new CorsConfiguration();
-        corsConfig.setAllowedOrigins(Arrays.asList(
-                "http://codingshuttle.in",
-                "http://www.codingshuttle.in",
-                "http://localhost:5173"
-        ));
+        corsConfig.setAllowedOrigins(allowedOrigins);
         corsConfig.setMaxAge(3600L);
         corsConfig.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         corsConfig.setAllowedHeaders(List.of("*"));
@@ -31,4 +31,3 @@ public class CorsConfig {
         return new CorsWebFilter(source);
     }
 }
-

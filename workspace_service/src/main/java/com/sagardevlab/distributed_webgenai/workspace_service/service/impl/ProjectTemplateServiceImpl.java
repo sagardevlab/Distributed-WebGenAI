@@ -10,6 +10,7 @@ import io.minio.*;
 import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -25,9 +26,13 @@ public class ProjectTemplateServiceImpl implements ProjectTemplateService {
     private final ProjectFileRepository projectFileRepository;
     private final ProjectRepository projectRepository;
 
-    private static final String TEMPLATE_BUCKET = "starter-projects";
-    private static final String TARGET_BUCKET = "projects";
-    private static final String TEMPLATE_NAME = "react-vite-tailwind-daisyui-starter";
+    public static final String TEMPLATE_NAME = "react-vite-tailwind-daisyui-starter";
+
+    @Value("${minio.template-bucket}")
+    private String templateBucket;
+
+    @Value("${minio.project-bucket}")
+    private String projectBucket;
 
 
     @Override
@@ -38,7 +43,7 @@ public class ProjectTemplateServiceImpl implements ProjectTemplateService {
         try {
             Iterable<Result<Item>> results = minioClient.listObjects(
                     ListObjectsArgs.builder()
-                            .bucket(TEMPLATE_BUCKET)
+                            .bucket(templateBucket)
                             .prefix(TEMPLATE_NAME + "/")
                             .recursive(true)
                             .build()
@@ -55,11 +60,11 @@ public class ProjectTemplateServiceImpl implements ProjectTemplateService {
 
                 minioClient.copyObject(
                         CopyObjectArgs.builder()
-                                .bucket(TARGET_BUCKET)
+                                .bucket(projectBucket)
                                 .object(destKey)
                                 .source(
                                         CopySource.builder()
-                                                .bucket(TEMPLATE_BUCKET)
+                                                .bucket(templateBucket)
                                                 .object(sourceKey)
                                                 .build()
                                 )
@@ -85,24 +90,3 @@ public class ProjectTemplateServiceImpl implements ProjectTemplateService {
 
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

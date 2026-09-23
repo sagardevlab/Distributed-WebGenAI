@@ -5,6 +5,7 @@ import com.sagardevlab.distributed_webgenai.workspace_service.dto.project.FileCo
 import com.sagardevlab.distributed_webgenai.workspace_service.service.ProjectFileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -15,11 +16,13 @@ public class FileController {
     private final ProjectFileService projectFileService;
 
     @GetMapping
+    @PreAuthorize("@security.canViewProject(#projectId)")
     public ResponseEntity<FileTreeDto> getFileTree(@PathVariable Long projectId) {
         return ResponseEntity.ok(projectFileService.getFileTree(projectId));
     }
 
     @GetMapping("/content")
+    @PreAuthorize("@security.canViewProject(#projectId)")
     public ResponseEntity<String> getFile(
             @PathVariable Long projectId,
             @RequestParam String path) {

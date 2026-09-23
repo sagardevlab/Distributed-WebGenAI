@@ -1,5 +1,6 @@
 package com.sagardevlab.distributed_webgenai.account_service.service.impl;
 
+import com.sagardevlab.distributed_webgenai.account_service.config.PlanSeeder;
 import com.sagardevlab.distributed_webgenai.account_service.dto.subscription.SubscriptionResponse;
 import com.sagardevlab.distributed_webgenai.account_service.entity.Plan;
 import com.sagardevlab.distributed_webgenai.account_service.entity.Subscription;
@@ -32,9 +33,6 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     private final UserRepository userRepository;
     private final PlanRepository planRepository;
 
-    private final Integer FREE_TIER_PROJECTS_ALLOWED = 100;
-
-
     @Override
     public SubscriptionResponse getCurrentSubscription() {
         Long userId = authUtil.getCurrentUserId();
@@ -42,9 +40,12 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         var currentSubscription = subscriptionRepository.findByUserIdAndStatusIn(userId, Set.of(
                 SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE,
                 SubscriptionStatus.TRIALING
-        )).orElse(
-                new Subscription()
-        );
+        )).orElse(null);
+
+        if (currentSubscription == null) {
+            // No paid subscription: the user is on the Free plan
+            return new SubscriptionResponse(subscriptionMapper.toPlanResponse(getFreePlan()), null, null, null);
+        }
 
         return subscriptionMapper.toSubscriptionResponse(currentSubscription);
     }
@@ -162,6 +163,11 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         return planRepository.findById(planId)
                 .orElseThrow(() -> new ResourceNotFoundException("Plan", planId.toString()));
 
+    }
+
+    private Plan getFreePlan() {
+        return planRepository.findFirstByNameIgnoreCase(PlanSeeder.FREE_PLAN_NAME)
+                .orElseThrow(() -> new ResourceNotFoundException("Plan", PlanSeeder.FREE_PLAN_NAME));
     }
 
     private Subscription getSubscription(String gatewaySubscriptionId) {

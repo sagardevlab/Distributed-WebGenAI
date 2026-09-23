@@ -1,0 +1,20 @@
+server:
+  port: 9050
+  servlet:
+    context-path: /account
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/account_db
+    username: account_user
+    password: ${DB_PASSWORD:account_pass}
+
+stripe:
+  api:
+    secret: ${STRIPE_API_KEY:sk_test_placeholder}
+  webhook:
+    secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder}
+
+app:
+  frontend:
+    url: ${FRONTEND_URL:http://localhost:5173}
